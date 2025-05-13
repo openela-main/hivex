@@ -9,11 +9,11 @@
 %global verify_tarball_signature 1
 
 Name:           hivex
-Version:        1.3.21
-Release:        3%{?dist}
+Version:        1.3.24
+Release:        1%{?dist}
 Summary:        Read and write Windows Registry binary hive files
 
-License:        LGPLv2
+License:        LGPL-2.1-only AND LGPL-2.0-or-later AND GPL-2.0-or-later
 URL:            http://libguestfs.org/
 
 Source0:        http://libguestfs.org/download/hivex/%{name}-%{version}.tar.gz
@@ -26,8 +26,8 @@ Source1:        http://libguestfs.org/download/hivex/%{name}-%{version}.tar.gz.s
 Source2:       libguestfs.keyring
 %endif
 
-Patch0000:      0001-lib-write-improve-key-collation-compatibility-with-Windows.patch
-
+BuildRequires:  make
+BuildRequires:  autoconf, automake, libtool, gettext-devel
 BuildRequires:  perl-interpreter
 BuildRequires:  perl-devel
 BuildRequires:  perl-generators
@@ -62,17 +62,13 @@ BuildRequires:  rubygem(rdoc)
 BuildRequires:  readline-devel
 BuildRequires:  libxml2-devel
 %if 0%{verify_tarball_signature}
-BuildRequires: gnupg2
+BuildRequires:  gnupg2
 %endif
-BuildRequires: make
 
 Requires:       %{name}-libs = %{version}-%{release}
 
 Conflicts:      %{name} < 1.3.20-6
 Obsoletes:      %{name} < 1.3.20-6
-
-# https://fedoraproject.org/wiki/Packaging:No_Bundled_Libraries#Packages_granted_exceptions
-Provides:      bundled(gnulib)
 
 
 %description
@@ -108,6 +104,7 @@ For Ruby bindings, see 'ruby-hivex'.
 
 %package libs
 Summary:        Library for %{name}
+License:        LGPL-2.1-only AND LGPL-2.0-or-later
 Conflicts:      %{name} < 1.3.20-6
 Obsoletes:      %{name} < 1.3.20-6
 
@@ -130,7 +127,8 @@ for %{name}.
 %if !0%{?rhel}
 %package static
 Summary:        Statically linked library for %{name}
-Requires:       %{name}-libs = %{version}-%{release}
+License:        LGPL-2.1-only AND LGPL-2.0-or-later
+Requires:       %{name}-devel = %{version}-%{release}
 
 
 %description static
@@ -142,7 +140,8 @@ for %{name}.
 %if %{with ocaml}
 %package -n ocaml-%{name}
 Summary:       OCaml bindings for %{name}
-Requires:      %{name}-libs = %{version}-%{release}
+License:       LGPL-2.0-or-later
+Requires:      %{name}-libs%{?_isa} = %{version}-%{release}
 
 
 %description -n ocaml-%{name}
@@ -154,8 +153,9 @@ programs which use %{name} you will also need ocaml-%{name}-devel.
 
 %package -n ocaml-%{name}-devel
 Summary:       OCaml bindings for %{name}
-Requires:      ocaml-%{name} = %{version}-%{release}
-Requires:      %{name}-devel = %{version}-%{release}
+License:       LGPL-2.0-or-later
+Requires:      ocaml-%{name}%{?_isa} = %{version}-%{release}
+Requires:      %{name}-devel%{?_isa} = %{version}-%{release}
 
 
 %description -n ocaml-%{name}-devel
@@ -166,8 +166,8 @@ required to use the OCaml bindings for %{name}.
 
 %package -n perl-%{name}
 Summary:       Perl bindings for %{name}
+License:       LGPL-2.0-or-later AND GPL-2.0-or-later
 Requires:      %{name}-libs = %{version}-%{release}
-Requires:      perl(:MODULE_COMPAT_%(eval "`%{__perl} -V:version`"; echo $version))
 
 
 %description -n perl-%{name}
@@ -176,6 +176,7 @@ perl-%{name} contains Perl bindings for %{name}.
 
 %package -n python3-%{name}
 Summary:       Python 3 bindings for %{name}
+License:       LGPL-2.0-or-later
 Requires:      %{name}-libs = %{version}-%{release}
 
 %description -n python3-%{name}
@@ -184,6 +185,7 @@ python3-%{name} contains Python 3 bindings for %{name}.
 
 %package -n ruby-%{name}
 Summary:       Ruby bindings for %{name}
+License:       LGPL-2.0-or-later
 Requires:      %{name}-libs = %{version}-%{release}
 Requires:      ruby(release)
 Requires:      ruby
@@ -199,6 +201,8 @@ ruby-%{name} contains Ruby bindings for %{name}.
 %endif
 %setup -q
 %autopatch -p1
+
+autoreconf -fi
 
 
 %build
@@ -232,17 +236,6 @@ rm $RPM_BUILD_ROOT%{python3_sitearch}/libhivexmod.la
 
 
 %check
-# Disable some gnulib tests which fail on Arm and POWER and S/390
-# (2020-07, 2020-12):
-for f in test-float test-perror2 test-pthread_sigmask1 test-strerror_r; do
-    pushd gnulib/tests
-    make $f
-    rm -f $f
-    touch $f
-    chmod +x $f
-    popd
-done
-
 if ! make check -k; then
     for f in $( find -name test-suite.log | xargs grep -l ^FAIL: ); do
         echo
@@ -254,7 +247,7 @@ if ! make check -k; then
 fi
 
 %files -f %{name}.lang
-%doc README
+%doc README.md
 %license LICENSE
 %{_bindir}/hivexget
 %{_bindir}/hivexml
@@ -265,7 +258,7 @@ fi
 
 
 %files libs
-%doc README
+%doc README.md
 %license LICENSE
 %{_libdir}/libhivex.so.*
 
@@ -287,20 +280,21 @@ fi
 
 %if %{with ocaml}
 %files -n ocaml-%{name}
-%doc README
-%{_libdir}/ocaml/hivex
-%exclude %{_libdir}/ocaml/hivex/*.a
-%exclude %{_libdir}/ocaml/hivex/*.cmxa
-%exclude %{_libdir}/ocaml/hivex/*.cmx
-%exclude %{_libdir}/ocaml/hivex/*.mli
+%doc README.md
+%dir %{_libdir}/ocaml/hivex
+%{_libdir}/ocaml/hivex/META
+%{_libdir}/ocaml/hivex/*.cma
+%{_libdir}/ocaml/hivex/*.cmi
 %{_libdir}/ocaml/stublibs/*.so
 %{_libdir}/ocaml/stublibs/*.so.owner
 
 
 %files -n ocaml-%{name}-devel
-%{_libdir}/ocaml/hivex/*.a
+%ifarch %{ocaml_native_compiler}
 %{_libdir}/ocaml/hivex/*.cmxa
 %{_libdir}/ocaml/hivex/*.cmx
+%endif
+%{_libdir}/ocaml/hivex/*.a
 %{_libdir}/ocaml/hivex/*.mli
 %endif
 
@@ -325,6 +319,10 @@ fi
 
 
 %changelog
+* Mon Sep 02 2024 Richard W.M. Jones <rjones@redhat.com> - 1.3.24-1
+- Rebase to Fedora Rawhide
+  resolves: RHEL-56803
+
 * Tue Sep 14 2021 Laszlo Ersek <lersek@redhat.com> - 1.3.21-3
 - Bring key collation order closer to that of Windows.
 - Resolves: RHBZ#1648524.
